@@ -1448,6 +1448,273 @@ class MineruParser(Parser):
             return False
 
 
+class MineruOpenApiParser(MineruParser):
+
+    @classmethod
+    def _run_mineru_command(
+        cls,
+        input_path: Union[str, Path],
+        output_dir: Union[str, Path],
+        model: str = "vlm",
+        lang: Optional[str] = None,
+        start_page: Optional[int] = None,
+        end_page: Optional[int] = None,
+        formula: bool = True,
+        table: bool = True,
+        timeout: Optional[int] = None,
+        method: str = "auto",
+        **kwargs,
+    ):
+        """
+        Run MinerU Open API command with specified parameters
+
+        Args:
+            input_path: Path to input file or directory
+            output_dir: Output directory path
+            model: Model name (auto, txt, ocr)
+            lang: Document language for OCR optimization
+            start_page: Starting page number (0-based) 
+            end_page: Ending page number (0-based)
+            formula: Enable formula parsing
+            table: Enable table parsing
+            timeout: Maximum seconds to wait for MinerU to complete. None means no limit.
+                     Raises TimeoutError if the process does not finish within this duration.
+            **kwargs: Additional parameters for subprocess (e.g., env)
+        """
+        cmd = [
+            "mineru-open-api",
+            "extract",
+            str(input_path),
+            "--output",
+            str(output_dir),
+            "--model",
+            model,
+            "--ocr",
+            "--format=md,json"
+        ]
+        if start_page is not None and end_page is not None:
+            cmd.append(f"--pages={start_page}-{end_page}")
+        if formula:
+            cmd.append("--formula")
+        if lang is not None:
+            cmd.append(f"--lang={lang}")
+        if table:
+            cmd.append("--table")
+        if timeout is not None:
+            cmd.append(f"--timeout={timeout}")
+        if table:
+            cmd.append("--table")
+
+        output_lines = []
+        error_lines = []
+
+        # Handle and validate environment variables
+        custom_env = kwargs.pop("env", None)
+
+        # Validate env if provided
+        if custom_env is not None:
+            if not isinstance(custom_env, dict):
+                raise TypeError(
+                    f"env must be a dictionary, got {type(custom_env).__name__}"
+                )
+            for k, v in custom_env.items():
+                if not isinstance(k, str) or not isinstance(v, str):
+                    raise TypeError("env keys and values must be strings")
+                
+        # Check for unsupported arguments to fail fast
+        if kwargs:
+            unsupported = ", ".join(kwargs.keys())
+            raise TypeError(
+                f"MineruParser._run_mineru_command received unexpected keyword argument(s): {unsupported}"
+            )
+        try:
+            # Prepare subprocess parameters to hide console window on Windows
+            import threading
+            from queue import Queue, Empty
+
+            # Log the command being executed
+            cls.logger.info(f"Executing mineru-open-api command: {' '.join(cmd)}")
+
+            env = None
+            if custom_env:
+                env = os.environ.copy()
+                env.update(custom_env)
+
+            subprocess_kwargs = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "text": True,
+                "encoding": "utf-8",
+                "errors": "ignore",
+                "bufsize": 1,  # Line buffered
+                "env": env,
+            }
+
+            # Hide console window on Windows
+            if _IS_WINDOWS:
+                subprocess_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+            # Function to read output from subprocess and add to queue
+            def enqueue_output(pipe, queue, prefix):
+                try:
+                    for line in iter(pipe.readline, ""):
+                        if line.strip():  # Only add non-empty lines
+                            queue.put((prefix, line.strip()))
+                    pipe.close()
+                except Exception as e:
+                    queue.put((prefix, f"Error reading {prefix}: {e}"))
+
+            # Start subprocess
+            process = subprocess.Popen(cmd, **subprocess_kwargs)
+
+            # Create queues for stdout and stderr
+            stdout_queue = Queue()
+            stderr_queue = Queue()
+
+            # Start threads to read output
+            stdout_thread = threading.Thread(
+                target=enqueue_output, args=(process.stdout, stdout_queue, "STDOUT")
+            )
+            stderr_thread = threading.Thread(
+                target=enqueue_output, args=(process.stderr, stderr_queue, "STDERR")
+            )
+
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Process output in real time
+            start_time = time.monotonic()
+
+            while process.poll() is None:
+                # Check stdout queue
+                try:
+                    while True:
+                        _, line = stdout_queue.get_nowait()
+                        output_lines.append(line)
+                        # Log mineru-open-api output with INFO level, prefixed with [MinerU-Open-API]
+                        cls.logger.info(f"[MinerU-Open-API] {line}")
+                except Empty:
+                    pass
+
+                # Check stderr queue
+                try:
+                    while True:
+                        _, line = stderr_queue.get_nowait()
+                        # Log mineru-open-api errors with WARNING level
+                        if "warning" in line.lower():
+                            cls.logger.warning(f"[MinerU-Open-API] {line}")
+                        elif "error" in line.lower():
+                            cls.logger.error(f"[MinerU-Open-API] {line}")
+                            error_message = line.split("\n")[0]
+                            error_lines.append(error_message)
+                        else:
+                            cls.logger.info(f"[MinerU-Open-API] {line}")
+                except Empty:
+                    pass
+
+                # Enforce timeout — kill the process and raise if exceeded
+                if timeout is not None and (time.monotonic() - start_time) > timeout:
+                    process.kill()
+                    process.wait()
+                    # Give reader threads a moment to drain before raising
+                    stdout_thread.join(timeout=1)
+                    stderr_thread.join(timeout=1)
+                    raise TimeoutError(
+                        f"MinerU-Open-API did not finish within {timeout}s. "
+                        "This often means a model download is stuck due to network issues. "
+                        "Check your internet connection or pre-download the required models."
+                    )
+
+                # Small delay to prevent busy waiting
+                time.sleep(0.1)
+
+            # Process any remaining output after process completion
+            try:
+                while True:
+                    _, line = stdout_queue.get_nowait()
+                    output_lines.append(line)
+                    cls.logger.info(f"[MinerU-Open-API] {line}")
+            except Empty:
+                pass
+
+            try:
+                while True:
+                    _, line = stderr_queue.get_nowait()
+                    if "warning" in line.lower():
+                        cls.logger.warning(f"[MinerU-Open-API] {line}")
+                    elif "error" in line.lower():
+                        cls.logger.error(f"[MinerU-Open-API] {line}")
+                        error_message = line.split("\n")[0]
+                        error_lines.append(error_message)
+                    else:
+                        cls.logger.info(f"[MinerU-Open-API] {line}")
+            except Empty:
+                pass
+
+            # Wait for process to complete and get return code
+            return_code = process.wait()
+
+            # Wait for threads to finish
+            stdout_thread.join(timeout=5)
+            stderr_thread.join(timeout=5)
+
+            if return_code != 0 or error_lines:
+                cls.logger.info("[MinerU-Open-API] Command executed failed")
+                raise MineruExecutionError(return_code, error_lines)
+            else:
+                cls.logger.info("[MinerU-Open-API] Command executed successfully")
+            # 将输出文件夹内的所有json文件重命名为原名字+"_content_list.json"，以保持与之前版本的兼容性
+            for file in os.listdir(output_dir):
+                if file.endswith(".json"):
+                    os.rename(os.path.join(output_dir, file), os.path.join(output_dir, file.replace(".json", "_content_list.json")))            
+
+
+        except MineruExecutionError:
+            raise
+        except subprocess.CalledProcessError as e:
+            cls.logger.error(f"Error running mineru-open-api subprocess command: {e}")
+            cls.logger.error(f"Command: {' '.join(cmd)}")
+            cls.logger.error(f"Return code: {e.returncode}")
+            raise
+        except FileNotFoundError:
+            raise RuntimeError(
+                "mineru-open-api command not found. Please ensure MinerU Open API is properly installed:\n"
+                "npm install -g mineru-open-api"
+            )
+        except Exception as e:
+            error_message = f"Unexpected error running mineru-open-api command: {e}"
+            cls.logger.error(error_message)
+            raise RuntimeError(error_message) from e
+        pass
+        
+    def check_installation(self) -> bool:
+        # 在windows和linux系统中分别判断mineru-open-api是否安装
+        # 通过命令行判断是否安装了mineru-open-api命令
+        cmd = [
+             "mineru-open-api",
+             "auth",
+             "--show",
+        ]
+        try:
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            if "No token configured" in result.stdout.strip():
+                self.logger.info("MinerU-Open-API is not setting token. Please configure it using: .env file include MINERU_TOKEN=your_token")
+                return False
+            else:
+                self.logger.info(f"MinerU-Open-API is properly installed. Token: {result.stdout.strip()}")
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            self.logger.error(
+                "MinerU-Open-API is not properly installed. "
+                "Please install it using: npm install -g mineru-open-api"
+            )
+            return False
+
+            
+
+
 class DoclingParser(Parser):
     """
     Docling document parsing utility class.
@@ -2505,6 +2772,8 @@ def get_parser(parser_type: str) -> Parser:
     parser_name = (parser_type or "mineru").strip().lower()
     if parser_name == "mineru":
         return MineruParser()
+    if parser_name == "mineru-open-api":
+        return MineruOpenApiParser()
     if parser_name == "docling":
         return DoclingParser()
     if parser_name == "paddleocr":

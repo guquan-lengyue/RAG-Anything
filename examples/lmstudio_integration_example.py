@@ -89,8 +89,7 @@ class LMStudioRAGIntegration:
         # Use a fresh working directory each run to avoid legacy doc_status schema conflicts
         self.config = RAGAnythingConfig(
             working_dir=f"./rag_storage_lmstudio/{uuid.uuid4()}",
-            parser="mineru",
-            parse_method="auto",
+            parser="mineru-open-api",
             enable_image_processing=False,
             enable_table_processing=True,
             enable_equation_processing=True,
@@ -168,7 +167,7 @@ class LMStudioRAGIntegration:
         """Create a completely serializable embedding function."""
         return EmbeddingFunc(
             embedding_dim=768,  # nomic-embed-text-v1.5 default dimension
-            max_token_size=8192,  # nomic-embed-text-v1.5 context length
+            max_token_size=2048,  # nomic-embed-text-v1.5 context length
             func=lmstudio_embedding_async,
         )
 
@@ -207,7 +206,6 @@ class LMStudioRAGIntegration:
             await self.rag.process_document_complete(
                 file_path=file_path,
                 output_dir="./output_lmstudio",
-                parse_method="auto",
                 display_stats=True,
             )
             print("✅ Document processing completed!")
@@ -312,10 +310,10 @@ async def main():
         return False
 
     # Example document processing (uncomment and provide a real file path)
-    # await integration.process_document_example("path/to/your/document.pdf")
+    await integration.process_document_example("C:/Users/kang_/Desktop/my/rag-anything/利用Python进行数据分析-43.pdf")
 
     # Example queries (uncomment after processing documents)
-    # await integration.query_examples()
+    await integration.query_examples()
 
     # Example basic query
     await integration.simple_query_example()
