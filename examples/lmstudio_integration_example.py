@@ -22,7 +22,6 @@ EMBEDDING_BINDING_API_KEY=lm-studio
 """
 
 import os
-import uuid
 import asyncio
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
@@ -88,9 +87,9 @@ class LMStudioRAGIntegration:
         # RAG-Anything configuration
         # Use a fresh working directory each run to avoid legacy doc_status schema conflicts
         self.config = RAGAnythingConfig(
-            working_dir=f"./rag_storage_lmstudio/{uuid.uuid4()}",
+            working_dir=f"./rag_storage_lmstudio/",
             parser="mineru-open-api",
-            enable_image_processing=False,
+            enable_image_processing=True,
             enable_table_processing=True,
             enable_equation_processing=True,
         )
@@ -269,7 +268,7 @@ Key benefits include:
                 content_list=content_list,
                 file_path="lmstudio_integration_demo.txt",
                 # Use a unique doc_id to avoid collisions and doc_status reuse across runs
-                doc_id=f"demo-content-{uuid.uuid4()}",
+                doc_id=f"demo-content",
                 display_stats=True,
             )
             print("✅ Sample content added to knowledge base")
@@ -296,10 +295,6 @@ async def main():
     # Initialize integration
     integration = LMStudioRAGIntegration()
 
-    # Test connection
-    if not await integration.test_connection():
-        return False
-
     print()
     if not await integration.test_chat_completion():
         return False
@@ -310,7 +305,7 @@ async def main():
         return False
 
     # Example document processing (uncomment and provide a real file path)
-    await integration.process_document_example("C:/Users/kang_/Desktop/my/rag-anything/利用Python进行数据分析-43.pdf")
+    await integration.process_document_example("C:/Users/kang_/Desktop/my/rag-anything/利用Python进行数据分析.pdf")
 
     # Example queries (uncomment after processing documents)
     await integration.query_examples()
