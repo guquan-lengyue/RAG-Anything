@@ -23,7 +23,9 @@ classifiers = [
 dependencies = [
     "huggingface_hub",
     "lightrag-hku",
+    "mineru-open-sdk>=0.2.5",
     "mineru[core]",
+    "pypdf2>=3.0.1",
     "tqdm",
 ]
 

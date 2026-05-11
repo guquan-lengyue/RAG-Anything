@@ -5,21 +5,31 @@ from functools import partial
 from lightrag import LightRAG
 from raganything import RAGAnything, RAGAnythingConfig
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
-from lightrag.utils import EmbeddingFunc, setup_logger
-from raganything.modalprocessors import ImageModalProcessor, TableModalProcessor
+from lightrag.utils import EmbeddingFunc
 import json
 from typing import List, Dict, Optional
 from openai import AsyncOpenAI
 
 # Load environment variables
 load_dotenv()
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:1234")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "lmstudio")
 LLM_MODEL = os.environ.get("LLM_MODEL", "google/gemma-4-e2b")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "lmstudio")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:1234")
+
 EMBEDDING_MODEL = os.environ.get(
     "EMBEDDING_MODEL", "text-embedding-nomic-embed-text-v1.5-embedding"
 )
+EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "lmstudio")
+EMBEDDING_BASE_URL = os.environ.get(
+    "EMBEDDING_BASE_URL", "http://127.0.0.1:1234"
+)
+
 VISION_MODEL = os.environ.get("VISION_MODEL", "google/gemma-4-e2b")
+VISION_API_KEY = os.environ.get("VISION_API_KEY", "lmstudio")
+VISION_BASE_URL = os.environ.get(
+    "VISION_BASE_URL", "http://127.0.0.1:1234"
+)
+
 
 
 async def llm_model_func_factory(
@@ -76,8 +86,8 @@ async def vision_model_func_factory(
                     else {"role": "user", "content": prompt}
                 ),
             ],
-            api_key=LLM_API_KEY,
-            base_url=LLM_BASE_URL,
+            api_key=VISION_API_KEY,
+            base_url=VISION_BASE_URL,
             **kwargs,
         )
     else:
@@ -96,8 +106,8 @@ def embedding_func_factory():
         func=partial(
             openai_embed.func,
             model=EMBEDDING_MODEL,
-            api_key=LLM_API_KEY,
-            base_url=LLM_BASE_URL,
+            api_key=EMBEDDING_API_KEY,
+            base_url=EMBEDDING_BASE_URL,
         ),
     )
 
@@ -140,18 +150,22 @@ class MyRagAnything:
             except Exception:
                 pass
 
-
-
     async def initialize_rag(self):
         self.light_rag = LightRAG(
             working_dir="./rag_storage",
             llm_model_func=llm_model_func_factory,
             embedding_func=embedding_func_factory(),
+            default_llm_timeout=1800,
+            default_embedding_timeout=1800,
+        )
+        config = RAGAnythingConfig(
+            parser="mineru-open-api",
         )
         await self.light_rag.initialize_storages()
         self.rag = RAGAnything(
             lightrag=self.light_rag,
             vision_model_func=vision_model_func_factory,
+            config=config,
         )
 
     async def insert_mineru_content(
@@ -180,37 +194,47 @@ class MyRagAnything:
                     continue
                 content_list_json_path = os.path.join(root, file)
                 # 读取json文件内容
-                with open(content_list_json_path, "r", encoding="utf-8") as f:
-                    content_list = json.load(f)
-                    # 将 img_path 转换为绝对路径
-                    for content in content_list:
-                        if content["type"] == "image":
-                            img_path = content["img_path"]
-                            abs_img_path = os.path.join(root, img_path)
-                            content["img_path"] = abs_img_path
+                try:
+                    with open(content_list_json_path, "r", encoding="utf-8") as f:
+                        content_list = json.load(f)
+                        # 将 img_path 转换为绝对路径
+                        for content in content_list:
+                            if content["type"] == "image":
+                                img_path = content["img_path"]
+                                abs_img_path = os.path.join(root, img_path)
+                                content["img_path"] = abs_img_path
+                except Exception as e:
+                    print(f"❌ Error reading {content_list_json_path}: {str(e)}")
+                    continue
                     # 插入知识库
-                    await self.rag.insert_content_list(
-                        content_list=content_list,
-                        file_path=file_name,  # 用于引用的参考文件名
-                        split_by_character=split_by_character,  # 可选的文本分割
-                        split_by_character_only=split_by_character_only,  # 可选的文本分割模式
-                        doc_id=doc_id,  # 可选的自定义文档ID（如果未提供将自动生成）
-                        display_stats=display_stats,  # 显示内容统计信息
-                    )
+                await self.rag.insert_content_list(
+                    content_list=content_list,
+                    file_path=file_name,  # 用于引用的参考文件名
+                    split_by_character=split_by_character,  # 可选的文本分割
+                    split_by_character_only=split_by_character_only,  # 可选的文本分割模式
+                    doc_id=doc_id,  # 可选的自定义文档ID（如果未提供将自动生成）
+                    display_stats=display_stats,  # 显示内容统计信息
+                )
 
 
 async def main():
     my_rag = MyRagAnything()
-    await my_rag.test_connection()
     await my_rag.initialize_rag()
-    await my_rag.insert_mineru_content(
-        file_name="利用Python进行数据分析.pdf",
-        file_root=r"C:\Users\kang_\Desktop\my\rag-anything\z-lean\output_lmstudio\利用Python进行数据分析_c00bc2b7",
-    )
-    # results = await my_rag.rag.query(
-    #     "请基于利用Python进行数据分析.pdf的内容，介绍一下什么是数据清洗？", mode="vlm"
+    # await my_rag.test_connection()
+    # await my_rag.rag.process_document_complete(
+    #     file_path=r"金融时间序列分析 第3版.pdf",
+    #     output_dir="./output_lmstudio",
+    #     display_stats=True,
     # )
-    # print(results)
+    for file_name in os.listdir("output_lmstudio"):
+        print("="*50)
+        print(file_name)
+        print("="*50)
+        await my_rag.insert_mineru_content(
+            file_name=file_name,
+            file_root=os.path.join("output_lmstudio", file_name),
+            doc_id=file_name,
+        )
     pass
 
 
