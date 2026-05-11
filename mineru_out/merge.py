@@ -55,3 +55,6 @@ for src_file_name in file_names:
             src_json = json.load(src_json_f)
             target_json.extend(src_json)
             json.dump(target_json, target_json_f, ensure_ascii=False, indent=4)
+
+
+

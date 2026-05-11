@@ -9,6 +9,7 @@ from lightrag.utils import EmbeddingFunc
 import json
 from typing import List, Dict, Optional
 from openai import AsyncOpenAI
+from tqdm import tqdm
 
 # Load environment variables
 load_dotenv()
@@ -206,15 +207,26 @@ class MyRagAnything:
                 except Exception as e:
                     print(f"❌ Error reading {content_list_json_path}: {str(e)}")
                     continue
-                    # 插入知识库
-                await self.rag.insert_content_list(
-                    content_list=content_list,
-                    file_path=file_name,  # 用于引用的参考文件名
-                    split_by_character=split_by_character,  # 可选的文本分割
-                    split_by_character_only=split_by_character_only,  # 可选的文本分割模式
-                    doc_id=doc_id,  # 可选的自定义文档ID（如果未提供将自动生成）
-                    display_stats=display_stats,  # 显示内容统计信息
-                )
+                # 分批插入知识库，每个批次100条记录
+                batch_size = 100
+                # 读取断点，如果存在则从断点继续插入
+                with open(f"{file_name}.last_inserted_index.txt", "w+", encoding="utf-8") as f:
+                    last_inserted_index = int(f.read().strip()) if f.read().strip() else 0
+                for i in tqdm(range(last_inserted_index, len(content_list), batch_size), desc=f"Inserting {file_name} into RAG"):
+                    # 不能超过列表长度
+                    end_index = min(i+batch_size, len(content_list))
+                    batch = content_list[i:end_index]
+                    await self.rag.insert_content_list(
+                        content_list=batch,
+                        file_path=file_name,  # 用于引用的参考文件名
+                        split_by_character=split_by_character,  # 可选的文本分割
+                        split_by_character_only=split_by_character_only,  # 可选的文本分割模式
+                        doc_id=doc_id,  # 可选的自定义文档ID（如果未提供将自动生成）
+                        display_stats=display_stats,  # 显示内容统计信息
+                    )
+                    # 写入当前插入的索引
+                    with open(f"{file_name}.last_inserted_index.txt", "w", encoding="utf-8") as f:
+                        f.write(str(end_index))
 
 
 async def main():
@@ -234,6 +246,7 @@ async def main():
             file_name=file_name,
             file_root=os.path.join("output_lmstudio", file_name),
             doc_id=file_name,
+            display_stats=True,
         )
     pass
 
