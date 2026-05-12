@@ -15,20 +15,20 @@ from tqdm import tqdm
 load_dotenv()
 LLM_MODEL = os.environ.get("LLM_MODEL", "google/gemma-4-e2b")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "lmstudio")
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:1234")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:1234/v1")
 
 EMBEDDING_MODEL = os.environ.get(
     "EMBEDDING_MODEL", "text-embedding-nomic-embed-text-v1.5-embedding"
 )
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "lmstudio")
 EMBEDDING_BASE_URL = os.environ.get(
-    "EMBEDDING_BASE_URL", "http://127.0.0.1:1234"
+    "EMBEDDING_BASE_URL", "http://127.0.0.1:1234/v1"
 )
 
 VISION_MODEL = os.environ.get("VISION_MODEL", "google/gemma-4-e2b")
 VISION_API_KEY = os.environ.get("VISION_API_KEY", "lmstudio")
 VISION_BASE_URL = os.environ.get(
-    "VISION_BASE_URL", "http://127.0.0.1:1234"
+    "VISION_BASE_URL", "http://127.0.0.1:1234/v1"
 )
 
 
@@ -122,15 +122,15 @@ class MyRagAnything:
     async def test_connection(self) -> bool:
         """Test LM Studio connection."""
         try:
-            print(f"🔌 Testing LM Studio connection at: {LLM_BASE_URL}")
+            print(f"Testing LM Studio connection at: {LLM_BASE_URL}")
             client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
             models = await client.models.list()
-            print(f"✅ Connected successfully! Found {len(models.data)} models")
+            print(f"Connected successfully! Found {len(models.data)} models")
 
             # Show available models
-            print("📊 Available models:")
+            print("Available models:")
             for i, model in enumerate(models.data[:5]):
-                marker = "🎯" if model.id == LLM_MODEL else "  "
+                marker = "✅" if model.id == LLM_MODEL else "  "
                 print(f"{marker} {i+1}. {model.id}")
 
             if len(models.data) > 5:
@@ -138,8 +138,8 @@ class MyRagAnything:
 
             return True
         except Exception as e:
-            print(f"❌ Connection failed: {str(e)}")
-            print("\n💡 Troubleshooting tips:")
+            print(f"Connection failed: {str(e)}")
+            print("\nTroubleshooting tips:")
             print("1. Ensure LM Studio is running")
             print("2. Start the local server in LM Studio")
             print("3. Load a model or enable just-in-time loading")
@@ -178,7 +178,7 @@ class MyRagAnything:
         doc_id=None,
         display_stats=True,
     ):
-        """_summary_
+        """
 
         Args:
             file_name (str): 用于引用的参考文件名
@@ -205,7 +205,7 @@ class MyRagAnything:
                                 abs_img_path = os.path.join(root, img_path)
                                 content["img_path"] = abs_img_path
                 except Exception as e:
-                    print(f"❌ Error reading {content_list_json_path}: {str(e)}")
+                    print(f"Error reading {content_list_json_path}: {str(e)}")
                     continue
                 # 分批插入知识库，每个批次100条记录
                 batch_size = 100

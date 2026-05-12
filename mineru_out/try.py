@@ -90,8 +90,7 @@ def main():
     pdf_files = []
     for root, dirs, files in os.walk(PDF_DIR):
         for file in files:
-            if file.lower().endswith(".pdf") and "金融时间序列分析-第3版" in file:
-                pdf_files.append(os.path.join(root, file))
+            pdf_files.append(os.path.join(root, file))
         
     print(f"发现 {len(pdf_files)} 个PDF文件")
 
