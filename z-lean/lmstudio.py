@@ -13,6 +13,9 @@ from tqdm import tqdm
 
 # Load environment variables
 load_dotenv()
+
+RAG_STORAGE = os.environ.get("RAG_STORAGE", "C:/Users/gqly/Desktop/workspace/RAG-Anything/z-lean/rag_storage")
+
 LLM_MODEL = os.environ.get("LLM_MODEL", "google/gemma-4-e2b")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "lmstudio")
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:1234/v1")
@@ -153,7 +156,7 @@ class MyRagAnything:
 
     async def initialize_rag(self):
         self.light_rag = LightRAG(
-            working_dir="./rag_storage",
+            working_dir=RAG_STORAGE,
             llm_model_func=llm_model_func_factory,
             embedding_func=embedding_func_factory(),
             default_llm_timeout=1800,
@@ -203,6 +206,7 @@ class MyRagAnything:
                             if content["type"] == "image":
                                 img_path = content["img_path"]
                                 abs_img_path = os.path.join(root, img_path)
+                                abs_img_path = os.path.abspath(abs_img_path)
                                 content["img_path"] = abs_img_path
                 except Exception as e:
                     print(f"Error reading {content_list_json_path}: {str(e)}")
@@ -238,16 +242,20 @@ async def main():
     #     output_dir="./output_lmstudio",
     #     display_stats=True,
     # )
-    for file_name in os.listdir("output_lmstudio"):
-        print("="*50)
-        print(file_name)
-        print("="*50)
-        await my_rag.insert_mineru_content(
-            file_name=file_name,
-            file_root=os.path.join("output_lmstudio", file_name),
-            doc_id=file_name,
-            display_stats=True,
-        )
+    # for file_name in os.listdir("output_lmstudio"):
+    #     print("="*50)
+    #     print(file_name)
+    #     print("="*50)
+    #     await my_rag.insert_mineru_content(
+    #         file_name=file_name,
+    #         file_root=os.path.join("output_lmstudio", file_name),
+    #         doc_id=file_name,
+    #         display_stats=True,
+    #     )
+    query_result = await my_rag.rag.aquery("给我几个量化分析的方案,同时给出对应的公式或流程",system_prompt="必须使用中文回答，公式必须有引用")
+    print("="*50)
+    print(query_result)
+    print("="*50)
     pass
 
 

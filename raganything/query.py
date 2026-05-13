@@ -390,7 +390,7 @@ class QueryMixin:
         # 1. Get original retrieval prompt (without generating final answer)
         query_param = QueryParam(mode=mode, only_need_prompt=True, **kwargs)
         raw_prompt = await self.lightrag.aquery(query, param=query_param)
-
+        assert raw_prompt is not None, "LightRAG failed to return a prompt"
         self.logger.debug("Retrieved raw prompt from LightRAG")
 
         # 2. Extract and process image paths
