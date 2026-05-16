@@ -79,3 +79,6 @@ memory-bank/
 .cursor/
 CLAUDE.md
 out/
+
+images/
+*.7z

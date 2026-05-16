@@ -14,7 +14,9 @@ from tqdm import tqdm
 # Load environment variables
 load_dotenv()
 
-RAG_STORAGE = os.environ.get("RAG_STORAGE", "C:/Users/gqly/Desktop/workspace/RAG-Anything/z-lean/rag_storage")
+RAG_STORAGE = os.environ.get(
+    "RAG_STORAGE", "C:/Users/gqly/Desktop/workspace/RAG-Anything/z-lean/rag_storage"
+)
 
 LLM_MODEL = os.environ.get("LLM_MODEL", "google/gemma-4-e2b")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "lmstudio")
@@ -24,16 +26,11 @@ EMBEDDING_MODEL = os.environ.get(
     "EMBEDDING_MODEL", "text-embedding-nomic-embed-text-v1.5-embedding"
 )
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "lmstudio")
-EMBEDDING_BASE_URL = os.environ.get(
-    "EMBEDDING_BASE_URL", "http://127.0.0.1:1234/v1"
-)
+EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "http://127.0.0.1:1234/v1")
 
 VISION_MODEL = os.environ.get("VISION_MODEL", "google/gemma-4-e2b")
 VISION_API_KEY = os.environ.get("VISION_API_KEY", "lmstudio")
-VISION_BASE_URL = os.environ.get(
-    "VISION_BASE_URL", "http://127.0.0.1:1234/v1"
-)
-
+VISION_BASE_URL = os.environ.get("VISION_BASE_URL", "http://127.0.0.1:1234/v1")
 
 
 async def llm_model_func_factory(
@@ -102,6 +99,7 @@ async def vision_model_func_factory(
             messages=messages,
             **kwargs,
         )
+
 
 def embedding_func_factory():
     return EmbeddingFunc(
@@ -214,11 +212,18 @@ class MyRagAnything:
                 # 分批插入知识库，每个批次100条记录
                 batch_size = 100
                 # 读取断点，如果存在则从断点继续插入
-                with open(f"{file_name}.last_inserted_index.txt", "w+", encoding="utf-8") as f:
-                    last_inserted_index = int(f.read().strip()) if f.read().strip() else 0
-                for i in tqdm(range(last_inserted_index, len(content_list), batch_size), desc=f"Inserting {file_name} into RAG"):
+                with open(
+                    f"{file_name}.last_inserted_index.txt", "w+", encoding="utf-8"
+                ) as f:
+                    last_inserted_index = (
+                        int(f.read().strip()) if f.read().strip() else 0
+                    )
+                for i in tqdm(
+                    range(last_inserted_index, len(content_list), batch_size),
+                    desc=f"Inserting {file_name} into RAG",
+                ):
                     # 不能超过列表长度
-                    end_index = min(i+batch_size, len(content_list))
+                    end_index = min(i + batch_size, len(content_list))
                     batch = content_list[i:end_index]
                     await self.rag.insert_content_list(
                         content_list=batch,
@@ -229,7 +234,9 @@ class MyRagAnything:
                         display_stats=display_stats,  # 显示内容统计信息
                     )
                     # 写入当前插入的索引
-                    with open(f"{file_name}.last_inserted_index.txt", "w", encoding="utf-8") as f:
+                    with open(
+                        f"{file_name}.last_inserted_index.txt", "w", encoding="utf-8"
+                    ) as f:
                         f.write(str(end_index))
 
 
@@ -252,10 +259,13 @@ async def main():
     #         doc_id=file_name,
     #         display_stats=True,
     #     )
-    query_result = await my_rag.rag.aquery("给我几个量化分析的方案,同时给出对应的公式或流程",system_prompt="必须使用中文回答，公式必须有引用")
-    print("="*50)
+    query_result = await my_rag.rag.aquery(
+        "给我几个量化分析的方案,同时给出对应的公式或流程",
+        system_prompt="必须使用中文回答，公式必须有引用",
+    )
+    print("=" * 50)
     print(query_result)
-    print("="*50)
+    print("=" * 50)
     pass
 
 
